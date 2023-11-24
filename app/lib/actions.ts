@@ -7,35 +7,62 @@ import { z } from 'zod';
 
 const FormSchema = z.object({
   id: z.string(),
-  customerId: z.string(),
-  amount: z.coerce.number(),
-  status: z.enum(['pending', 'paid']),
+  customerId: z.string({
+    invalid_type_error: '请选择一个用户',
+  }),
+  amount: z.coerce.number().gt(0, { message: '请输入大于 $0 的金额' }),
+  status: z.enum(['pending', 'paid'], {
+    invalid_type_error: '请选择发票状态',
+  }),
   date: z.string(),
 });
 
 const CreateInvoice = FormSchema.omit({ id: true, date: true });
 const UpdateInvoice = FormSchema.omit({ id: true, date: true });
 
-export async function createInvoice(formData: FormData) {
-  const { customerId, amount, status } = CreateInvoice.parse({
+export type State = {
+  errors?: {
+    customerId?: string[];
+    amount?: string[];
+    status?: string[];
+  };
+  message?: string | null;
+};
+export async function createInvoice(prevState: State, formData: FormData) {
+  // 使用 Zod 验证表单
+  const validatedFields = CreateInvoice.safeParse({
     customerId: formData.get('customerId'),
     amount: formData.get('amount'),
     status: formData.get('status'),
   });
+  console.log('validatedFields: ', validatedFields);
+  // 如果表单验证失败，尽早返回错误。否则继续执行
+  if (!validatedFields.success) {
+    return {
+      errors: validatedFields.error.flatten().fieldErrors,
+      message: '缺少字段，无法创建发票',
+    };
+  }
+
+  // 准备将数据插入数据库
+  const { customerId, amount, status } = validatedFields.data;
   const amountInCents = amount * 100;
   const date = new Date().toISOString().split('T')[0];
 
+  // 将数据插入到数据库中
   try {
     await sql`
       INSERT INTO invoices (customer_id, amount, status, date)
       VALUES (${customerId}, ${amountInCents}, ${status}, ${date})
     `;
   } catch (error) {
+    // 如果发生数据库错误，返回更具体的错误信息
     return {
       message: 'Database Error: Failed to Create Invoice.',
     };
   }
 
+  // 重新验证发票页面的缓存并重定向至发票列表页面
   revalidatePath('/dashboard/invoices');
   redirect('/dashboard/invoices');
 }
