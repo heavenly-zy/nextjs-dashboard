@@ -130,13 +130,9 @@ export default function Form({ customers }: { customers: CustomerField[] }) {
                 </p>
               ))}
           </div>
-          <div id="invoice-status-error" aria-live="polite" aria-atomic="true">
-            {state.errors && !!Object.keys(state.errors).length && (
-              <p className="mt-2 text-sm text-red-500">
-                缺少必填的字段，无法创建发票
-              </p>
-            )}
-          </div>
+          {state.errors && !!Object.keys(state.errors).length && (
+            <p className="mt-2 text-sm text-red-500">{state.message}</p>
+          )}
         </fieldset>
       </div>
       <div className="mt-6 flex justify-end gap-4">
